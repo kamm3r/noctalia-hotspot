@@ -11,7 +11,7 @@ Item {
   id: root
 
   property var pluginApi: null
-  property var settings: pluginApi ? pluginApi.pluginSettings : ({}
+  property var settings: pluginApi ? pluginApi.pluginSettings : ({})
   property bool showPassword: false
   property int saveIndicator: 0
 
@@ -154,6 +154,13 @@ Item {
     }
 
     Component.onCompleted: {
+      if (pluginApi) {
+        ssidField.text = pluginApi.pluginSettings.ssid || "NoctaliaHotspot"
+        passwordField.text = pluginApi.pluginSettings.password || ""
+        autoStartSwitch.checked = pluginApi.pluginSettings.autoStart === true
+        notifSwitch.checked = pluginApi.pluginSettings.showNotifications !== false
+      }
+
       ssidField.textChanged.connect(function() {
         if (pluginApi) {
           pluginApi.pluginSettings.ssid = ssidField.text
