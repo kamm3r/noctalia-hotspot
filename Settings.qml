@@ -59,11 +59,10 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Style.marginS
 
-    NTextInput {
+    TextField {
       Layout.fillWidth: true
-      label: "Password"
-      description: "Minimum 8 characters"
       text: root.editPassword
+      placeholderText: "Enter password"
       echoMode: root.showPassword ? TextInput.Normal : TextInput.Password
       onTextChanged: root.editPassword = text
       onEditingFinished: saveSettings()
@@ -74,6 +73,12 @@ ColumnLayout {
       tooltipText: root.showPassword ? "Hide password" : "Show password"
       onClicked: root.showPassword = !root.showPassword
     }
+  }
+
+  NText {
+    text: "Password"
+    color: Color.mOnSurfaceVariant
+    pointSize: Style.fontSizeXS
   }
 
   NText {
