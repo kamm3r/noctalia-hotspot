@@ -5,7 +5,7 @@ import Quickshell
 import qs.Commons
 import qs.Widgets
 import qs.Services.UI
-import "../Services"
+import "Services"
 
 Item {
   id: root
