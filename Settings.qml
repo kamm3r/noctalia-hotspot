@@ -11,7 +11,15 @@ Item {
   id: root
 
   property var pluginApi: null
-  property var settings: pluginApi ? pluginApi.pluginSettings : ({})
+  property var settings: pluginApi ? pluginApi.pluginSettings : ({}
+  property bool showPassword: false
+  property int saveIndicator: 0
+
+  function saveWithIndicator() {
+    pluginApi.saveSettings()
+    saveIndicator = 1
+    saveIndicatorTimer.restart()
+  }
 
   implicitWidth: 320
   implicitHeight: column.implicitHeight + Style.marginL * 2
@@ -60,12 +68,25 @@ Item {
       Layout.fillWidth: true
     }
 
-    TextField {
-      id: passwordField
+    RowLayout {
       Layout.fillWidth: true
-      text: settings.password || ""
-      placeholderText: "Enter password"
-      echoMode: TextInput.Password
+
+      TextField {
+        id: passwordField
+        Layout.fillWidth: true
+        text: settings.password || ""
+        placeholderText: "Enter password"
+        echoMode: root.showPassword ? TextInput.Normal : TextInput.Password
+      }
+
+      NIconButton {
+        icon: root.showPassword ? "eye-off" : "eye"
+        tooltipText: root.showPassword ? "Hide password" : "Show password"
+        baseSize: Style.baseWidgetSize * 0.75
+        onClicked: {
+          root.showPassword = !root.showPassword
+        }
+      }
     }
 
     NText {
@@ -111,29 +132,50 @@ Item {
       }
     }
 
+    RowLayout {
+      Layout.fillWidth: true
+      Layout.topMargin: Style.marginS
+
+      NText {
+        text: saveIndicator === 1 ? "Settings saved" : ""
+        color: Color.mPrimary
+        pointSize: Style.fontSizeXS
+        font.italic: true
+        Layout.fillWidth: true
+      }
+    }
+
+    Timer {
+      id: saveIndicatorTimer
+      interval: 2000
+      onTriggered: {
+        saveIndicator = 0
+      }
+    }
+
     Component.onCompleted: {
       ssidField.textChanged.connect(function() {
         if (pluginApi) {
           pluginApi.pluginSettings.ssid = ssidField.text
-          pluginApi.saveSettings()
+          root.saveWithIndicator()
         }
       })
       passwordField.textChanged.connect(function() {
         if (pluginApi) {
           pluginApi.pluginSettings.password = passwordField.text
-          pluginApi.saveSettings()
+          root.saveWithIndicator()
         }
       })
       autoStartSwitch.checkedChanged.connect(function() {
         if (pluginApi) {
           pluginApi.pluginSettings.autoStart = autoStartSwitch.checked
-          pluginApi.saveSettings()
+          root.saveWithIndicator()
         }
       })
       notifSwitch.checkedChanged.connect(function() {
         if (pluginApi) {
           pluginApi.pluginSettings.showNotifications = notifSwitch.checked
-          pluginApi.saveSettings()
+          root.saveWithIndicator()
         }
       })
     }
