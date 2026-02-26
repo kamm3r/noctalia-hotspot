@@ -1,0 +1,14 @@
+*.o
+*.so
+*.a
+*.moc
+*.qmlc
+*.qmlbc
+*.jsc
+Makefile
+*.pro.user
+*.autosave
+.qmlcACHE/
+.moc/
+ui_*.h
+qrc_*.cpp
