@@ -1,0 +1,26 @@
+{
+  "id": "hotspot",
+  "name": "Hotspot",
+  "version": "1.0.0",
+  "minNoctaliaVersion": "3.6.0",
+  "author": "noctalia",
+  "license": "MIT",
+  "repository": "",
+  "description": "WiFi hotspot widget with device monitoring",
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "panel": "Panel.qml",
+    "settings": "Settings/Settings.qml"
+  },
+  "dependencies": {
+    "plugins": []
+  },
+  "metadata": {
+    "defaultSettings": {
+      "ssid": "NoctaliaHotspot",
+      "password": "",
+      "autoStart": false,
+      "showNotifications": true
+    }
+  }
+}
