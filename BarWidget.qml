@@ -27,6 +27,8 @@ Item {
   readonly property int connectedCount: HotspotService.connectedDevices?.length ?? 0
   readonly property bool isLoading: HotspotService.isLoading
 
+  scale: 1.0
+
   implicitWidth: capsuleHeight
   implicitHeight: capsuleHeight
 
@@ -61,6 +63,13 @@ Item {
     hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
 
+    onPressed: {
+      root.scale = 0.97
+    }
+    onReleased: {
+      root.scale = 1.0
+    }
+
     onEntered: {
       let msg
       if (isLoading) {
@@ -81,6 +90,13 @@ Item {
 
     onClicked: {
       pluginApi?.openPanel(root.screen, root)
+    }
+  }
+
+  Behavior on scale {
+    NumberAnimation {
+      duration: 150
+      easing.type: Easing.OutCubic
     }
   }
 }

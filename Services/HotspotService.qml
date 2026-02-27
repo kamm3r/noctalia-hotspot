@@ -135,15 +135,11 @@ Item {
       }
     }
     onExited: function() {
-      if (this.exitCode === 0) {
-        currentSsid = ssid
-        Qt.callLater(() => {
-          checkActiveHotspot()
-        })
-      } else {
-        lastError = "Failed to start hotspot"
-        state = HotspotService.State.Error
-      }
+      // nmcli may return non-zero even on success, so we check if hotspot actually started
+      // Wait a moment then check
+      Qt.callLater(() => {
+        checkActiveHotspot()
+      })
     }
   }
 
