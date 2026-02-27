@@ -27,7 +27,7 @@ Item {
     readonly property bool allowAttach: true
     readonly property real contentPreferredWidth: 380 * Style.uiScaleRatio
     readonly property real contentPreferredHeight: isActive 
-        ? 280 * Style.uiScaleRatio * Settings.data.ui.fontDefaultScale 
+        ? 200 * Style.uiScaleRatio * Settings.data.ui.fontDefaultScale 
         : 100 * Style.uiScaleRatio * Settings.data.ui.fontDefaultScale
 
     anchors.fill: parent
