@@ -18,6 +18,7 @@ ColumnLayout {
   property bool editAutoStart: cfg.autoStart ?? defaults.autoStart ?? false
   property bool editShowNotifications: cfg.showNotifications ?? defaults.showNotifications ?? true
   property bool showPassword: false
+  property bool showSavedIndicator: false
 
   function saveSettings() {
     pluginApi.pluginSettings.ssid = root.editSsid
@@ -26,7 +27,14 @@ ColumnLayout {
     pluginApi.pluginSettings.showNotifications = root.editShowNotifications
     pluginApi.saveSettings()
 
-    Logger.i("Hotspot", "Settings saved")
+    root.showSavedIndicator = true
+    savedIndicatorTimer.restart()
+  }
+
+  Timer {
+    id: savedIndicatorTimer
+    interval: 2000
+    onTriggered: root.showSavedIndicator = false
   }
 
   NText {
@@ -52,7 +60,6 @@ ColumnLayout {
     description: "Name of the wireless network"
     text: root.editSsid
     onTextChanged: root.editSsid = text
-    onEditingFinished: saveSettings()
   }
 
   RowLayout {
@@ -65,7 +72,6 @@ ColumnLayout {
       placeholderText: "Enter password"
       echoMode: root.showPassword ? TextInput.Normal : TextInput.Password
       onTextChanged: root.editPassword = text
-      onEditingFinished: saveSettings()
     }
 
     NIconButton {
@@ -92,41 +98,29 @@ ColumnLayout {
 
   NDivider {}
 
-  RowLayout {
-    Layout.fillWidth: true
-
-    NText {
-      text: "Auto-start on boot"
-      color: Color.mOnSurface
-      pointSize: Style.fontSizeS
-      Layout.fillWidth: true
-    }
-
-    Switch {
-      checked: root.editAutoStart
-      onCheckedChanged: {
-        root.editAutoStart = checked
-        saveSettings()
-      }
-    }
+  NToggle {
+    label: "Auto-start on boot"
+    checked: root.editAutoStart
+    onToggled: root.editAutoStart = checked
   }
 
-  RowLayout {
+  NToggle {
+    label: "Show notifications"
+    checked: root.editShowNotifications
+    onToggled: root.editShowNotifications = checked
+  }
+
+  NButton {
+    text: "Apply"
     Layout.fillWidth: true
+    onClicked: saveSettings()
+  }
 
-    NText {
-      text: "Show notifications"
-      color: Color.mOnSurface
-      pointSize: Style.fontSizeS
-      Layout.fillWidth: true
-    }
-
-    Switch {
-      checked: root.editShowNotifications
-      onCheckedChanged: {
-        root.editShowNotifications = checked
-        saveSettings()
-      }
-    }
+  NText {
+    visible: root.showSavedIndicator
+    text: "Settings saved"
+    color: Color.mPrimary
+    pointSize: Style.fontSizeXS
+    font.italic: true
   }
 }

@@ -209,17 +209,24 @@ Item {
   Process {
     id: refreshProcess
     running: false
-    command: ["nmcli", "-t", "-f", "SSID,BSSID,STATE", "device", "wifi", "list"]
+    command: ["ip", "neigh", "show", "dev", wifiInterface]
     stdout: StdioCollector {
       onStreamFinished: {
         const lines = text.split("\n")
         const devs = []
         
         for (let i = 0; i < lines.length; i++) {
-          const parts = lines[i].trim().split(":")
-          if (parts.length >= 3 && parts[2] === "connected") {
-            if (parts[0]) {
-              devs.push({ ssid: parts[0], mac: parts[1] || parts[0] })
+          const line = lines[i].trim()
+          if (!line) continue
+          
+          // Parse: "10.42.0.225 lladdr f2:f0:6a:21:fe:97 REACHABLE"
+          const parts = line.split(/\s+/)
+          if (parts.length >= 3 && parts[1] === "lladdr") {
+            const mac = parts[2].toUpperCase()
+            const ip = parts[0]
+            // Filter out incomplete entries
+            if (mac !== "00:00:00:00:00:00" && mac !== "FF:FF:FF:FF:FF:FF") {
+              devs.push({ mac: mac, ssid: ip })
             }
           }
         }
@@ -231,20 +238,12 @@ Item {
 
   function disconnectDevice(mac) {
     if (!mac || state !== HotspotService.State.Active) return
-    discProcess.mac = mac
-    discProcess.running = true
-  }
-
-  Process {
-    id: discProcess
-    property string mac: ""
-    running: false
-    command: ["nmcli", "device", "wifi", "disconnect", "bssid", mac]
-    stdout: StdioCollector {}
-    stderr: StdioCollector {}
-    onExited: function() {
-      Qt.callLater(refreshDevices)
-    }
+    
+    // Try to disconnect using arp -n to remove the entry
+    // Note: Full disconnect requires sudo iw station del
+    // For now, just refresh to show updated list
+    console.log("Disconnect requested for:", mac)
+    refreshDevices()
   }
 
   Timer {
