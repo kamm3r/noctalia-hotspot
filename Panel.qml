@@ -43,7 +43,7 @@ Item {
 
         RowLayout {
             NIcon {
-                icon: isActive ? "wifi" : "wifi-off"
+                icon: isActive ? "access-point" : "access-point-off"
                 color: isActive ? Color.mPrimary : Color.mOnSurfaceVariant
                 pointSize: Style.fontSizeXXL
             }

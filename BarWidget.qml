@@ -50,7 +50,7 @@ Item {
     border.width: Style.capsuleBorderWidth
 
     NIcon {
-      icon: isActive ? "wifi" : "wifi-off"
+      icon: isActive ? "access-point" : "access-point-off"
       color: isActive ? Color.mOnPrimary : (mouseArea.containsMouse ? Color.mOnSurface : Color.mOnSurfaceVariant)
       pointSize: Style.toOdd(capsuleHeight * 0.48)
       anchors.centerIn: parent
