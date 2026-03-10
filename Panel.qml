@@ -65,7 +65,7 @@ Item {
                 Layout.fillWidth: false
                 checked: isActive
                 enabled: !isLoading
-                onToggled: {
+                onToggled: function(checked) {
                     if (checked) {
                         HotspotService.startHotspot(savedSsid, savedPassword);
                     } else {
@@ -154,23 +154,16 @@ Item {
                         }
 
                         NText {
-                            text: connectedDevices[index]?.ssid || "Unknown"
+                            text: {
+                                const dev = connectedDevices[index];
+                                if (!dev)
+                                    return "Unknown device";
+                                return dev.ip ? dev.ip + " (" + dev.mac + ")" : dev.mac;
+                            }
                             pointSize: Style.fontSizeS
                             color: Color.mOnSurface
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                        }
-
-                        NIconButton {
-                            icon: "close"
-                            baseSize: 10
-                            tooltipText: "Disconnect"
-
-                            onClicked: {
-                                const dev = connectedDevices[index];
-                                if (dev)
-                                    HotspotService.disconnectDevice(dev.mac);
-                            }
                         }
                     }
                 }

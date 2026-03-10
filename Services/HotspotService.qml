@@ -22,10 +22,19 @@ Item {
   property string lastError: ""
   property string wifiInterface: "wlp15s0"
   property string internetInterface: "enp14s0"
+  property string pendingSsid: ""
+  property int pendingCheckAttempts: 0
+  property int maxPendingCheckAttempts: 6
 
   function detectInterfaces() {
     state = HotspotService.State.Busy
     detectProcess.running = true
+  }
+
+  function clearPendingStart() {
+    pendingSsid = ""
+    pendingCheckAttempts = 0
+    pendingCheckTimer.stop()
   }
 
   Process {
@@ -62,44 +71,68 @@ Item {
     checkProcess.running = true
   }
 
+  function ensureSharingSupport() {
+    sharingSupportProcess.running = true
+  }
+
   Process {
     id: checkProcess
     running: false
-    command: ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"]
+    command: [
+      "sh",
+      "-c",
+      "connection_name=$(nmcli -g GENERAL.CONNECTION device show \"$1\" 2>/dev/null | tr -d '\\r'); if [ -z \"$connection_name\" ] || [ \"$connection_name\" = \"--\" ]; then exit 0; fi; connection_mode=$(nmcli -g 802-11-wireless.mode connection show \"$connection_name\" 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\\r'); if [ \"$connection_mode\" = \"ap\" ]; then printf '%s\\n' \"$connection_name\"; fi",
+      "sh",
+      wifiInterface
+    ]
     stdout: StdioCollector {
       onStreamFinished: {
-        const lines = text.split("\n")
-        let found = false
-        for (let i = 0; i < lines.length; i++) {
-          const parts = lines[i].trim().split(":")
-          if (parts.length >= 2 && parts[1] === "802-11-wireless") {
-            if (parts[0].toLowerCase().includes("hotspot") || parts[0].toLowerCase().includes("ap")) {
-              found = true
-              currentSsid = parts[0]
-              break
-            }
-          }
-        }
-        
-        if (found) {
+        const detectedSsid = text.trim()
+
+        if (detectedSsid !== "") {
+          clearPendingStart()
+          currentSsid = detectedSsid
+          lastError = ""
           state = HotspotService.State.Active
+          ensureSharingSupport()
           refreshDevices()
-        } else {
-          state = HotspotService.State.Idle
-          currentSsid = ""
-          connectedDevices = []
+          return
         }
+
+        connectedDevices = []
+        currentSsid = ""
+
+        if (pendingSsid !== "" && pendingCheckAttempts < maxPendingCheckAttempts) {
+          pendingCheckAttempts += 1
+          state = HotspotService.State.Busy
+          pendingCheckTimer.restart()
+          return
+        }
+
+        if (pendingSsid !== "") {
+          lastError = startProcess.errorText || "Failed to start hotspot"
+          clearPendingStart()
+        }
+
+        state = HotspotService.State.Idle
       }
     }
   }
 
   function startHotspot(ssid, password) {
-    if (!ssid || ssid.trim() === "") {
+    const trimmedSsid = ssid ? ssid.trim() : ""
+    const normalizedPassword = password || ""
+
+    if (!trimmedSsid) {
       lastError = "SSID required"
       return
     }
-    if (!password || password.length < 8) {
+    if (normalizedPassword && normalizedPassword.length < 8) {
       lastError = "Password must be 8+ chars"
+      return
+    }
+    if (normalizedPassword.length > 63) {
+      lastError = "Password must be 63 chars or less"
       return
     }
     if (!wifiInterface) {
@@ -109,9 +142,14 @@ Item {
 
     state = HotspotService.State.Busy
     lastError = ""
-    
-    startProcess.ssid = ssid.trim()
-    startProcess.password = password
+
+    pendingSsid = trimmedSsid
+    pendingCheckAttempts = 0
+    pendingCheckTimer.stop()
+
+    startProcess.errorText = ""
+    startProcess.ssid = trimmedSsid
+    startProcess.password = normalizedPassword
     startProcess.running = true
   }
 
@@ -119,78 +157,65 @@ Item {
     id: startProcess
     property string ssid: ""
     property string password: ""
+    property string errorText: ""
     running: false
-    command: {
-      const cmd = ["nmcli", "device", "wifi", "hotspot", 
-                   "ifname", wifiInterface, 
-                   "ssid", ssid, 
-                   "con-name", ssid]
-      if (password) cmd.push("password", password)
-      return cmd
-    }
+    command: [
+      "sh",
+      "-c",
+      "ifname=\"$1\"; ssid=\"$2\"; password=\"$3\"; if ! nmcli -t -f NAME connection show | grep -Fx -- \"$ssid\" >/dev/null 2>&1; then nmcli connection add type wifi ifname \"$ifname\" con-name \"$ssid\" ssid \"$ssid\"; fi; if iw list 2>/dev/null | grep -Fq '5180.0 MHz [36]'; then band_args='802-11-wireless.band a 802-11-wireless.channel 36'; else band_args='802-11-wireless.band bg 802-11-wireless.channel 0'; fi; set -- $band_args; nmcli connection modify \"$ssid\" connection.interface-name \"$ifname\" 802-11-wireless.ssid \"$ssid\" 802-11-wireless.mode ap \"$@\" ipv4.method shared ipv4.addresses \"\" ipv4.gateway \"\" ipv4.dns \"\" ipv6.method ignore connection.autoconnect no; if [ -n \"$password\" ]; then nmcli connection modify \"$ssid\" 802-11-wireless-security.key-mgmt wpa-psk 802-11-wireless-security.auth-alg open 802-11-wireless-security.proto rsn 802-11-wireless-security.pairwise ccmp 802-11-wireless-security.group ccmp 802-11-wireless-security.psk \"$password\"; else nmcli connection modify \"$ssid\" remove 802-11-wireless-security >/dev/null 2>&1 || true; fi; nmcli connection up \"$ssid\" ifname \"$ifname\"",
+      "hotspot",
+      wifiInterface,
+      ssid,
+      password
+    ]
     stdout: StdioCollector {}
     stderr: StdioCollector {
       onStreamFinished: {
+        startProcess.errorText = text.trim()
         if (text.trim()) console.log("start stderr:", text.trim())
       }
     }
     onExited: function() {
-      // nmcli may return non-zero even on success, so we check if hotspot actually started
-      // Wait a moment then check
-      Qt.callLater(() => {
-        checkActiveHotspot()
-      })
+      pendingCheckTimer.restart()
     }
   }
 
   function stopHotspot() {
-    if (state !== HotspotService.State.Active) return
-    
+    if (state !== HotspotService.State.Active && currentSsid === "") return
+
+    clearPendingStart()
     state = HotspotService.State.Busy
+    lastError = ""
+    stopProcess.conn = currentSsid
     stopProcess.running = true
   }
 
   Process {
     id: stopProcess
+    property string conn: ""
     running: false
-    command: ["nmcli", "-t", "-f", "NAME", "connection", "show", "--active"]
-    stdout: StdioCollector {
+    command: [
+      "sh",
+      "-c",
+      "connection_name=\"$2\"; if [ -z \"$connection_name\" ]; then connection_name=$(nmcli -g GENERAL.CONNECTION device show \"$1\" 2>/dev/null | tr -d '\\r'); fi; if [ -z \"$connection_name\" ] || [ \"$connection_name\" = \"--\" ]; then exit 1; fi; nmcli connection down \"$connection_name\"",
+      "sh",
+      wifiInterface,
+      conn
+    ]
+    stdout: StdioCollector {}
+    stderr: StdioCollector {
       onStreamFinished: {
-        const lines = text.split("\n")
-        let conn = ""
-        
-        for (let i = 0; i < lines.length; i++) {
-          const parts = lines[i].trim().split(":")
-          if (parts.length >= 1) {
-            const name = parts[0]
-            if (name.toLowerCase().includes("hotspot") || name.toLowerCase().includes("ap") || name.includes("Hotspot")) {
-              conn = name
-              break
-            }
-          }
-        }
-        
-        if (conn) {
-          downProcess.conn = conn
-          downProcess.running = true
-        } else {
-          state = HotspotService.State.Idle
+        const errorText = text.trim()
+        if (errorText) {
+          lastError = errorText
         }
       }
     }
-  }
-
-  Process {
-    id: downProcess
-    property string conn: ""
-    running: false
-    command: ["nmcli", "connection", "down", conn]
-    stdout: StdioCollector {}
-    stderr: StdioCollector {}
-    onExited: function() {
-      connectedDevices = []
-      currentSsid = ""
-      state = HotspotService.State.Idle
+    onExited: function(exitCode) {
+      if (exitCode !== 0 && !lastError) {
+        lastError = "Failed to stop hotspot"
+      }
+      checkActiveHotspot()
     }
   }
 
@@ -220,9 +245,10 @@ Item {
           if (parts.length >= 3 && parts[1] === "lladdr") {
             const mac = parts[2].toUpperCase()
             const ip = parts[0]
+            const linkState = parts[parts.length - 1]
             // Filter out incomplete entries
-            if (mac !== "00:00:00:00:00:00" && mac !== "FF:FF:FF:FF:FF:FF") {
-              devs.push({ mac: mac, ssid: ip })
+            if (mac !== "00:00:00:00:00:00" && mac !== "FF:FF:FF:FF:FF:FF" && linkState !== "FAILED") {
+              devs.push({ mac: mac, ip: ip })
             }
           }
         }
@@ -233,13 +259,41 @@ Item {
   }
 
   function disconnectDevice(mac) {
-    if (!mac || state !== HotspotService.State.Active) return
-    
-    // Try to disconnect using arp -n to remove the entry
-    // Note: Full disconnect requires sudo iw station del
-    // For now, just refresh to show updated list
-    console.log("Disconnect requested for:", mac)
-    refreshDevices()
+    if (!mac || state !== HotspotService.State.Active) return false
+
+    lastError = "Disconnecting individual devices is not supported by NetworkManager here"
+    return false
+  }
+
+  Process {
+    id: sharingSupportProcess
+    running: false
+    command: [
+      "sh",
+      "-c",
+      "hotspot_if=\"$1\"; upstream_if=\"$2\"; if ! command -v firewall-cmd >/dev/null 2>&1; then exit 0; fi; hotspot_zone=$(firewall-cmd --get-zone-of-interface=\"$hotspot_if\" 2>/dev/null); if [ -n \"$hotspot_zone\" ]; then firewall-cmd --zone=\"$hotspot_zone\" --add-forward >/dev/null 2>&1 || true; fi; if [ -n \"$upstream_if\" ]; then upstream_zone=$(firewall-cmd --get-zone-of-interface=\"$upstream_if\" 2>/dev/null); else upstream_zone=''; fi; if [ -z \"$upstream_zone\" ]; then upstream_zone=$(firewall-cmd --get-default-zone 2>/dev/null); fi; if [ -n \"$upstream_zone\" ]; then firewall-cmd --zone=\"$upstream_zone\" --add-masquerade >/dev/null 2>&1 || true; fi; if [ -n \"$hotspot_if\" ] && [ -n \"$upstream_if\" ]; then direct_rules=$(firewall-cmd --direct --get-all-rules 2>/dev/null || true); case \"$direct_rules\" in *\"ipv4 filter FORWARD 0 -i $hotspot_if -o $upstream_if -j ACCEPT\"*) ;; *) firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -i \"$hotspot_if\" -o \"$upstream_if\" -j ACCEPT >/dev/null 2>&1 || true ;; esac; case \"$direct_rules\" in *\"ipv4 filter FORWARD 0 -i $upstream_if -o $hotspot_if -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT\"*) ;; *) firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -i \"$upstream_if\" -o \"$hotspot_if\" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT >/dev/null 2>&1 || true ;; esac; case \"$direct_rules\" in *\"ipv4 nat POSTROUTING 0 -o $upstream_if -j MASQUERADE\"*) ;; *) firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o \"$upstream_if\" -j MASQUERADE >/dev/null 2>&1 || true ;; esac; fi",
+      "hotspot",
+      wifiInterface,
+      internetInterface
+    ]
+    stdout: StdioCollector {}
+    stderr: StdioCollector {
+      onStreamFinished: {
+        const errorText = text.trim()
+        if (errorText) {
+          console.log("sharing support stderr:", errorText)
+        }
+      }
+    }
+  }
+
+  Timer {
+    id: pendingCheckTimer
+    interval: 1000
+    repeat: false
+    onTriggered: {
+      checkActiveHotspot()
+    }
   }
 
   Timer {
