@@ -3,7 +3,7 @@
   "name": "Hotspot",
   "version": "1.0.0",
   "minNoctaliaVersion": "3.6.0",
-  "author": "noctalia",
+  "author": "kamm3r",
   "license": "MIT",
   "repository": "",
   "description": "WiFi hotspot widget with device monitoring",
